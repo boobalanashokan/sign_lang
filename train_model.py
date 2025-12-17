@@ -1,46 +1,46 @@
-import os
-import pickle
 import numpy as np
+import pandas as pd
+from datasets import load_dataset
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+import pickle
 
-DATA_DIR = './data'
+print("⏳ Downloading Sign Language MNIST from Hugging Face...")
+# Load dataset from Hugging Face (Open Source)
+dataset = load_dataset("nielsr/sign-language-mnist", split="train")
 
-data = []
-labels = []
+print("✅ Download Complete. Processing...")
 
-# Load data
-for dir_ in os.listdir(DATA_DIR):
-    for img_path in os.listdir(os.path.join(DATA_DIR, dir_)):
-        data_path = os.path.join(DATA_DIR, dir_, img_path)
-        with open(data_path, 'rb') as f:
-            data_aux = pickle.load(f)
-        
-        # Ensure data consistency (sometimes mediapipe fails, filter those out)
-        if len(data_aux) == 42: # 21 points * 2 coordinates (x, y)
-            data.append(data_aux)
-            labels.append(int(dir_))
+# Convert to Pandas DataFrame for easier handling
+df = pd.DataFrame(dataset)
 
-data = np.asarray(data)
-labels = np.asarray(labels)
+# The dataset has 'image' (PIL Image) and 'label' (Int)
+# We need to flatten the 28x28 images into 1D arrays (784 pixels)
+X = []
+y = []
 
-# Split Data
-x_train, x_test, y_train, y_test = train_test_split(data, labels, test_size=0.2, shuffle=True, stratify=labels)
+for i in range(len(df)):
+    # Get image as numpy array (28x28)
+    img_array = np.array(df['image'][i])
+    # Flatten to 1D array
+    X.append(img_array.flatten())
+    y.append(df['label'][i])
 
-# Initialize Model
-model = RandomForestClassifier()
+X = np.array(X)
+y = np.array(y)
 
-# Train
-model.fit(x_train, y_train)
+# Train Random Forest
+print("🧠 Training Model (This might take a minute)...")
+model = RandomForestClassifier(n_estimators=100, n_jobs=-1)
+model.fit(X, y)
 
-# Test
-y_predict = model.predict(x_test)
-score = accuracy_score(y_predict, y_test)
-
-print(f'{score * 100}% of samples were classified correctly !')
+# Accuracy Check (Optional, using a subset of training for speed)
+y_pred = model.predict(X[:1000])
+acc = accuracy_score(y[:1000], y_pred)
+print(f"✅ Model Trained! Training Accuracy: {acc * 100:.2f}%")
 
 # Save the model
-f = open('model.p', 'wb')
-pickle.dump({'model': model}, f)
-f.close()
+with open('model.p', 'wb') as f:
+    pickle.dump(model, f)
+
+print("💾 Model saved to 'model.p'")
